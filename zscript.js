@@ -10,18 +10,13 @@ function main () {
         def n : 99 + 1 * 2
         def n : 99 + 1 * 2 / 3
         set! n : 100
-        if n < 2 then
-            n
-        else
-            n + 1
-        fi
-        if n < 2 then
-            n
-        elif n < 3 then
-            n + 1
-        else
-            n + 2
-        fi
+        def fac : fun (n)
+            if n < 2 then
+                n
+            else
+                n * fac(n - 1)
+            fi
+        nuf
         `;
     let ast = read(code);
     dbg("main: ", ast);
@@ -41,10 +36,14 @@ function lex (s) {
 
 function parse (arr) {
     let ret = ["do"];
+    let kw = ["nuf", "elif", "else", "fi"]
     while (arr.length) {
+        if (kw.includes(arr[0])) {
+            return ret.length === 2 ? ret[1] : ret;
+        }
         ret.push(parse_plus(arr));
     }
-    return ret.length > 1 ? ret : ret[1];
+    return ret.length === 2 ? ret[1] : ret;
 }
 
 // hierarchy: +|- *|/ var
@@ -95,62 +94,30 @@ function parse_var (arr) {
         return ["set!", k, v];
     }
     else if (x === "fun") {
-        arr.shift();
         let parms = parse_var(arr);
         let body = parse(arr);
+        assert(arr.shift() === "nuf", "expected nuf !")
         return ["fun", parms, body];
     }
     else if (x === "if") {
         let cond = parse_plus(arr);
-        console.log("if: cond: " + cond);
         assert(arr.shift() === "then", "expected then !");
 
-        let conseq = ["do"];
-        let alt = null;
-        while (1) {
-            if (arr.length === 0) {
-                throw "expected fi !"
-            }
-            else if (arr[0] === "elif") {
-                arr[0] = "if";
-                return ["if", cond, 
-                              conseq.length === 2 ? conseq[1] : conseq, 
-                              parse_plus(arr)];
-            }
-            else if (arr[0] === "else") {
-                arr.shift();
-                break;
-            }
-            else if (arr[0] === "fi") {
-                arr.shift();
-                return ["if", cond, 
-                              conseq.length === 2 ? conseq[1] : conseq, 
-                              alt.length === 2 ? alt[1] : alt 
-                       ];
-            }
-            else {
-                conseq.push(parse_plus(arr));
-            }
-        } // elihw
-
-        alt = ["do"];
-        while (1) {
-            if (arr.length === 0) {
-                throw "expected fi !"
-            }
-            else if (arr[0] === "fi") {
-                arr.shift();
-                return ["if", cond, 
-                              conseq.length === 2 ? conseq[1] : conseq, 
-                              alt.length === 2 ? alt[1] : alt 
-                       ];
-            }
-            else {
-                alt.push(parse_plus(arr));
-            }
-        } // elihw
+        let conseq = parse(arr);
+        let alt = "nil";
+        if (arr[0] === "elif") {
+            arr[0] = "if";
+            alt = parse(arr);
+        }
+        else if (arr[0] === "else") {
+            arr.shift();
+            alt = parse(arr);
+        }
+        assert(arr.shift() === "fi", "expected fi !");
+        return ["if", cond, conseq, alt];
     }
     else if (x === "(") {
+        console.log("parens: arr: " + arr);
         let ret = [];
         while (1) {
             if (arr.length === 0) {
@@ -163,10 +130,14 @@ function parse_var (arr) {
             else {
                 ret.push(parse_plus(arr));
             }
-        }
-    } // elihw
+        } // elihw
+    }
     else if (!isNaN(x)){
         return new Number(x);
+    }
+    else if (arr[0] === "(") { // fun call ?
+        let args = parse_var(arr);
+        return [x].concat(args);
     }
     else {
         return x;
