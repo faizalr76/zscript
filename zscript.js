@@ -4,8 +4,13 @@ Array.prototype.toString = function () {
 };
 
 function main () {
-    let code = "def n : 99\n"
-        + "set! n : 100";
+    let code = ` 
+        def n : 1 + 2
+        def n : 99 + 1 + 2
+        def n : 99 + 1 * 2
+        def n : 99 + 1 * 2 / 3
+        set! n : 100
+        `;
     let ast = read(code);
     dbg("main: ", ast);
 }
@@ -25,31 +30,52 @@ function lex (s) {
 function parse (arr) {
     let ret = ["do"];
     while (arr.length) {
-        ret.push(parse_one(arr));
+        ret.push(parse_plus(arr));
     }
     return ret.length > 1 ? ret : ret[1];
 }
 
-function parse_one (arr) {
-    while (arr.length) {
-        let x = arr.shift();
-        if (x === "def") {
-            let k = arr.shift();
-            assert(arr.shift() === ":", "expected :");
-            let v = arr.shift();
-            return ["def", k, v];
-        }
-        else if (x === "set!") {
-            let k = arr.shift();
-            assert(arr.shift() === ":", "expected :");
-            let v = arr.shift();
-            return ["set!", k, v];
-        }
-        else {
-            dbg("idk");
+// hierarchy: +|- *|/ var
+function parse_plus (arr) {
+    let ret = parse_mult(arr);
+    if (arr[0] === "+" || arr[0] === "-") {
+        while (arr[0] === "+" || arr[0] === "-") {
+            ret = [arr.shift(), ret, parse_mult(arr)];
         }
     }
     return ret;
+}
+
+function parse_mult (arr) {
+    let ret = parse_var(arr);
+    if (arr[0] === "*" || arr[0] === "/") {
+        while (arr[0] === "*" || arr[0] === "/") {
+            ret = [arr.shift(), ret, parse_var(arr)];
+        }
+    }
+    return ret;
+}
+
+function parse_var (arr) {
+    let x = arr.shift();
+    if (x === "def") {
+        let k = arr.shift();
+        assert(arr.shift() === ":", "expected :");
+        let v = parse_plus(arr);
+        return ["def", k, v];
+    }
+    else if (x === "set!") {
+        let k = arr.shift();
+        assert(arr.shift() === ":", "expected :");
+        let v = parse_plus(arr);
+        return ["set!", k, v];
+    }
+    else if (!isNaN(x)){
+        return new Number(x);
+    }
+    else {
+        return x;
+    }
 }
 
 function assert (flag, s) {
